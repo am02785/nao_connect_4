@@ -16,13 +16,8 @@ class Grid:
     # Adds a counter to the grid based on the colour of the counter
     # and upper hole number
     def add_counter_to_grid(self, colour, hole_number):
-        counter_added = False
-        if hole_number >= 0 or hole_number <= 6:
-            if self.__number_of_counters_in_columns[hole_number] <= 6:
-                self.__grid[hole_number][self.__number_of_counters_in_columns[hole_number]] = colour
-                self.__number_of_counters_in_columns[hole_number] += 1
-                counter_added = True
-        return counter_added
+        self.__grid[hole_number][self.__number_of_counters_in_columns[hole_number]] = colour
+        self.__number_of_counters_in_columns[hole_number] += 1
 
     # Checks if a player has won the game based on the colour of the counter
     def check_if_game_won(self, colour):
