@@ -24,19 +24,13 @@ class Grid:
         # Checks the horizontal spaces
         for y in range(len(self.__grid[0])):
             for x in range(len(self.__grid) - 3):
-                if self.__grid[x][y] == colour and self.__grid[y][y] == colour and self.__grid[x+2][y] == colour and self.__grid[x+3][y] == colour:
+                if self.__grid[x][y] == colour and self.__grid[x+1][y] == colour and self.__grid[x+2][y] == colour and self.__grid[x+3][y] == colour:
                     return True
 
         # Checks the vertical spaces
         for x in range(len(self.__grid)):
             for y in range(len(self.__grid[0]) - 3):
                 if self.__grid[x][y] == colour and self.__grid[x][y+1] == colour and self.__grid[x][y+2] == colour and self.__grid[x][y+3] == colour:
-                    return True
-
-        # Checks the positively sloped diagonal spaces
-        for x in range(len(self.__grid) - 3):
-            for y in range(len(self.__grid[0]) - 3):
-                if self.__grid[x][y] == colour and self.__grid[x+1][y+1] == colour and self.__grid[x+2][y+2] == colour and self.__grid[x+3][y+3] == colour:
                     return True
 
         # Checks the positively sloped diagonal spaces
