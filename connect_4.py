@@ -17,6 +17,9 @@ class Connect4:
         # The player_2_colour attribute which represents the colour
         # of the counter player 2 uses
         self.__player_2_colour = ''
+        # The number_of_turns attribute which represents the number
+        # of turns left
+        self.__number_of_turns = 42
         # starts the game
         self.__play_game()
 
@@ -33,30 +36,40 @@ class Connect4:
         print('\n')
 
         while True:
-            print(self.__grid.__str__() + '\n')
-            print(self.__player + '\'s turn\n')
+            if self.__number_of_turns == 0:
+                print(self.__grid.__str__() + '\n')
+                print('it\'s a tie')
+                break
+            else:
+                print(self.__grid.__str__() + '\n')
+                print('number of turns left: ' + str(self.__number_of_turns) + '\n')
+                print(self.__player + '\'s turn\n')
 
-            if self.__player == 'player 1':
-                hole_number = int(raw_input("Which hole number do you want to put the counter in:"))
-                print('\n')
-                self.__grid.add_counter_to_grid(self.__player_1_colour, hole_number)
-                if self.__grid.check_if_game_won(self.__player_1_colour):
-                    break
-                else:
-                    self.__player = 'player 2'
+                if self.__player == 'player 1':
+                    hole_number = int(raw_input("Which hole number do you want to put the counter in:"))
+                    print('\n')
+                    self.__grid.add_counter_to_grid(self.__player_1_colour, hole_number)
+                    if self.__grid.check_if_game_won(self.__player_1_colour):
+                        print(self.__grid.__str__() + '\n')
+                        print(self.__player + ' won')
+                        print('\n')
+                        break
+                    else:
+                        self.__player = 'player 2'
+                        self.__number_of_turns -= 1
 
-            elif self.__player == 'player 2':
-                hole_number = int(raw_input("Which hole number do you want to put the counter in:"))
-                print('\n')
-                self.__grid.add_counter_to_grid(self.__player_2_colour, hole_number)
-                if self.__grid.check_if_game_won(self.__player_2_colour):
-                    break
-                else:
-                    self.__player = 'player 1'
-
-        print(self.__grid.__str__() + '\n')
-        print(self.__player + ' won')
-        print('\n')
+                elif self.__player == 'player 2':
+                    hole_number = int(raw_input("Which hole number do you want to put the counter in:"))
+                    print('\n')
+                    self.__grid.add_counter_to_grid(self.__player_2_colour, hole_number)
+                    if self.__grid.check_if_game_won(self.__player_2_colour):
+                        print(self.__grid.__str__() + '\n')
+                        print(self.__player + ' won')
+                        print('\n')
+                        break
+                    else:
+                        self.__player = 'player 1'
+                        self.__number_of_turns -= 1
 
 if __name__ == '__main__':
     Connect4()
