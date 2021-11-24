@@ -1,5 +1,6 @@
 # The Connect4 class which represents the connect4 game
-from random import randint
+import math
+import random
 from grid import Grid
 
 
@@ -59,7 +60,8 @@ class Connect4:
                         self.__number_of_turns -= 1
 
                 elif self.__player == 'player 2':
-                    hole_number = int(raw_input("Which hole number do you want to put the counter in:"))
+                    hole_number = self.__grid.minimax_with_alpha_beta_pruning(self.__grid.get_grid(), 4, True, float('-inf'), float('inf'), self.__player_1_colour, self.__player_2_colour)[1]
+                    print(self.__grid.minimax_with_alpha_beta_pruning(self.__grid.get_grid(), 4, True, float('-inf'), float('inf'), self.__player_1_colour, self.__player_2_colour))
                     print('\n')
                     self.__grid.add_counter_to_grid(self.__player_2_colour, hole_number)
                     if self.__grid.check_if_game_won(self.__player_2_colour):
@@ -70,6 +72,14 @@ class Connect4:
                     else:
                         self.__player = 'player 1'
                         self.__number_of_turns -= 1
+
+    # Creates a copy of a grid
+    def __copy_grid(self, grid):
+        board = grid.get_grid()
+        new_board = []
+        for column in board:
+            new_board.append(column[:])
+        return Grid(new_board, grid.get_number_of_counters_in_columns()[:])
 
 if __name__ == '__main__':
     Connect4()
