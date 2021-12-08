@@ -29,6 +29,7 @@ class Grid:
         self.__number_of_counters_in_columns[hole_number] += 1
 
     # Checks if a player has won the game based on the colour of the counter
+    # used https://stackoverflow.com/questions/29949169/python-connect-4-check-win-function
     def check_if_game_won(self, colour, grid=None):
         if grid is None:
             grid = self.__grid
