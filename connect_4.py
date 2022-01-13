@@ -1,6 +1,7 @@
 # The Connect4 class which represents the connect4 game
 import math
 import random
+import nao_controller
 
 class Connect4:
 
@@ -9,7 +10,7 @@ class Connect4:
         # The player attribute which specifies who's turn it is
         self.__player = 'player 1'
         # The grid attribute which represents the grid in the game
-        self.__grid = [['*' for y in range(6)] for y in range(7)]
+        self.__grid = [['*' for y in range(6)] for x in range(7)]
         # The player_1_colour attribute which represents the colour
         # of the counter player 1 uses
         self.__player_1_colour = ''
@@ -242,6 +243,7 @@ class Connect4:
 
                 elif self.__player == 'player 2':
                     hole_number = self.minimax_with_alpha_beta_pruning(self.__grid, 4, True, float('-inf'), float('inf'))[1]
+                    nao_controller.wait_for_counter(hole_number)
                     print('\n')
                     self.add_counter_to_grid(self.__player_2_colour, self.__grid, hole_number)
                     if self.check_if_game_won(self.__player_2_colour, self.__grid):
