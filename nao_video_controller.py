@@ -1,19 +1,17 @@
 import numpy as np
+import cv2
+import naoqi
 
-# shows an image
-# used https://github.com/Matt-Jennings-GitHub/ConnectFour-ComputerVisionAI/blob/master/ConnectFourComputerVision.py
-def imgshow(name,img):
-    cv2.imshow(name,img)
-    cv2.moveWindow(name,200,200)
-    cv2.waitKey(0)
-
-#video_capture = cv2.VideoCapture(0)
-#ret, img = video_capture.read()
-#video_capture.release()
+ip_address = "127.0.0.1"
+port = 9559
+photoCaptureProxy = naoqi.ALProxy("ALPhotoCapture", ip_address, port)
+photoCaptureProxy.setPictureFormat("png")
 
 # determines the state of the game
+# used https://github.com/Matt-Jennings-GitHub/ConnectFour-ComputerVisionAI/blob/master/ConnectFourComputerVision.py
 def determine_state():
-    img = cv2.imread('picture2.jpg')
+    photoCaptureProxy.takePicture('', 'grid_image', True)
+    img = cv2.imread('grid_image.png')
 
     new_width = 500  # Resize
     img_h, img_w, _ = img.shape
@@ -22,15 +20,12 @@ def determine_state():
     img_h = int(img_h * scale)
     img = cv2.resize(img, (img_w, img_h), interpolation=cv2.INTER_AREA)
     img_orig = img.copy()
-    imgshow('Original Image (Resized)', img_orig)
 
     # Bilateral Filter
     bilateral_filtered_image = cv2.bilateralFilter(img, 15, 190, 190)
-    imgshow('Bilateral Filter', bilateral_filtered_image)
 
     # Outline Edges
     edge_detected_image = cv2.Canny(bilateral_filtered_image, 75, 150)
-    imgshow('Edge Detection', edge_detected_image)
 
     # Find Circles
     ret, contours, hierarchy = cv2.findContours(edge_detected_image, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)  # Edges to contours
@@ -61,8 +56,6 @@ def determine_state():
         x, y, w, h = rect
         cv2.rectangle(img_circle_contours, (x, y), (x + w, y + h), (0, 0, 255), 1)
 
-    imgshow('Circles Detected', img_circle_contours)
-
     # Interpolate Grid
     rows, cols = (6, 7)
     mean_w = sum([rect[2] for r in rect_list]) / len(rect_list)
@@ -85,13 +78,11 @@ def determine_state():
     upper_red = np.array([255, 255, 255])  # Upper range for red colour space
     mask_red = cv2.inRange(img_hsv, lower_red, upper_red)
     img_red = cv2.bitwise_and(img, img, mask=mask_red)
-    imgshow("Red Mask", img_red)
 
     lower_yellow = np.array([10, 150, 100])
     upper_yellow = np.array([60, 255, 255])
     mask_yellow = cv2.inRange(img_hsv, lower_yellow, upper_yellow)
     img_yellow = cv2.bitwise_and(img, img, mask=mask_yellow)
-    imgshow("Yellow Mask", img_yellow)
 
     # Identify Colours
     grid = np.zeros((rows, cols))
@@ -130,8 +121,5 @@ def determine_state():
             else:
                 column.append('*')
         state.append(column)
-
-    imgshow('Img Grid Overlay', img_grid_overlay)
-    imgshow('Img Grid', img_grid)
 
     return state
