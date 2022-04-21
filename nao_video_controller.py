@@ -2,7 +2,7 @@ import numpy as np
 import cv2
 import naoqi
 
-ip_address = "127.0.0.1"
+ip_address = "192.168.43.43"
 port = 9559
 photoCaptureProxy = naoqi.ALProxy("ALPhotoCapture", ip_address, port)
 photoCaptureProxy.setPictureFormat("png")
@@ -10,8 +10,8 @@ photoCaptureProxy.setPictureFormat("png")
 # determines the state of the game
 # used https://github.com/Matt-Jennings-GitHub/ConnectFour-ComputerVisionAI/blob/master/ConnectFourComputerVision.py
 def determine_state():
-    photoCaptureProxy.takePicture('', 'grid_image', True)
-    img = cv2.imread('grid_image.png')
+    #photoCaptureProxy.takePicture('', 'grid_image', True)
+    #img = cv2.imread('grid_image.png')
 
     new_width = 500  # Resize
     img_h, img_w, _ = img.shape

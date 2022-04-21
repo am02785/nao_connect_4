@@ -1,27 +1,25 @@
 # The Connect4 class which represents the connect4 game
-from __future__ import division
-import numpy as np
 import cv2
 import naoqi
 import numpy as np
 import random
+import nao_motion_controller
+# import nao_video_controller
 import keyboard
-import time
-from PIL import Image
 
-posture_proxy = naoqi.ALProxy("ALRobotPosture", "192.168.189.75", 9559)
-posture_proxy.goToPosture("Stand", 1.0)
+ip_address = "192.168.43.43"
+port = 9559
+tts = naoqi.ALProxy("ALTextToSpeech", ip_address, port)
+
+postureProxy = naoqi.ALProxy("ALRobotPosture", ip_address, port)
+postureProxy.goToPosture("Stand", 1.0)
+
+video_capture = cv2.VideoCapture(0)
 
 class Connect4:
 
     # The constructor of the Connect4 class
-    def __init__(self, ip_address, port):
-        self.__tts = naoqi.ALProxy("ALTextToSpeech", ip_address, port)
-        self.__photo_capture_proxy = naoqi.ALProxy("ALPhotoCapture", ip_address, port)
-        self.__photo_capture_proxy.setPictureFormat("jpg")
-        self.__camera_proxy = naoqi.ALProxy("ALVideoDevice", ip_address, port)
-        self.__memory = naoqi.ALProxy("ALMemory", ip_address, port)
-        self.__face_characteristics = naoqi.ALProxy("ALFaceCharacteristics", ip_address, port)
+    def __init__(self):
         # The player attribute which specifies who's turn it is
         self.__player = 'player 1'
         # The grid attribute which represents the grid in the game
@@ -225,163 +223,6 @@ class Connect4:
                 valid_columns.append(x)
         return valid_columns
 
-    # Uses the persons facial expression to adjust
-    # the difficulty of the game
-    def adjust_difficulty(self, facial_expression):
-        if self.__difficulty == 'easy':
-            if facial_expression == 'happy':
-                self.__difficulty = 'medium'
-            self.__tts.say('the difficulty is now ' + self.__difficulty)
-        elif self.__difficulty == 'medium':
-            if facial_expression == 'anger' \
-            or facial_expression == 'surprise':
-                self.__difficulty = 'easy'
-            elif facial_expression == 'happy':
-                self.__difficulty = 'hard'
-            self.__tts.say('the difficulty is now ' + self.__difficulty)
-        elif self.__difficulty == 'hard':
-            if facial_expression == 'anger' \
-            or facial_expression == 'surprise':
-                self.__difficulty = 'medium'
-            self.__tts.say('the difficulty is now ' + self.__difficulty)
-
-    # determines the state of the game
-    # used https://github.com/Matt-Jennings-GitHub/ConnectFour-ComputerVisionAI/blob/master/ConnectFourComputerVision.py
-    def determine_state(self):
-        # used http://doc.aldebaran.com/1-14/dev/python/examples/vision/get_image.html
-        name_id = self.__camera_proxy.subscribeCamera("VM_2", 1, 2, 13, 15)
-        nao_image = self.__camera_proxy.getImageRemote(name_id)
-
-        self.__camera_proxy.unsubscribe(name_id)
-
-        image_width = nao_image[0]
-        image_height = nao_image[1]
-        array = nao_image[6]
-
-        im = Image.frombytes("RGB", (image_width, image_height), array)
-        im.save("grid_image.png", "PNG")
-
-        img = cv2.imread("grid_image.png")
-        img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
-
-        #file_name = self.__photo_capture_proxy.takePicture('images', 'image', True)
-        #print(file_name[0])
-        #print(self.__photo_capture_proxy.getColorSpace())
-        #print(self.__photo_capture_proxy.getResolution())
-        #img = cv2.imread(file_name[0])
-        #print(img)
-
-        new_width = 500  # Resize
-        img_h, img_w, _ = img.shape
-        scale = new_width / img_w
-        img_w = int(img_w * scale)
-        img_h = int(img_h * scale)
-        img = cv2.resize(img, (img_w, img_h), interpolation=cv2.INTER_AREA)
-        img_orig = img.copy()
-
-        # Bilateral Filter
-        bilateral_filtered_image = cv2.bilateralFilter(img, 15, 190, 190)
-
-        # Outline Edges
-        edge_detected_image = cv2.Canny(bilateral_filtered_image, 75, 150)
-
-        # Find Circles
-        ret, contours, hierarchy = cv2.findContours(edge_detected_image, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)  # Edges to contours
-
-        contour_list = []
-        rect_list = []
-        position_list = []
-
-        for contour in contours:
-            approx = cv2.approxPolyDP(contour, 0.01 * cv2.arcLength(contour, True), True)  # Contour Polygons
-            area = cv2.contourArea(contour)
-
-            rect = cv2.boundingRect(contour)  # Polygon bounding rectangles
-            x_rect, y_rect, w_rect, h_rect = rect
-            x_rect += w_rect / 2
-            y_rect += h_rect / 2
-            area_rect = w_rect * h_rect
-
-            if ((len(approx) > 8) & (len(approx) < 23) & (area > 250) & (area_rect < (img_w * img_h) / 5)) & (
-                    w_rect in range(h_rect - 10, h_rect + 10)):  # Circle conditions
-                contour_list.append(contour)
-                position_list.append((x_rect, y_rect))
-                rect_list.append(rect)
-
-        img_circle_contours = img_orig.copy()
-        cv2.drawContours(img_circle_contours, contour_list, -1, (0, 255, 0), thickness=1)  # Display Circles
-        for rect in rect_list:
-            x, y, w, h = rect
-            cv2.rectangle(img_circle_contours, (x, y), (x + w, y + h), (0, 0, 255), 1)
-
-        # Interpolate Grid
-        rows, cols = (6, 7)
-        mean_w = sum([rect[2] for r in rect_list]) / len(rect_list)
-        mean_h = sum([rect[3] for r in rect_list]) / len(rect_list)
-        position_list.sort(key=lambda x: x[0])
-        max_x = int(position_list[-1][0])
-        min_x = int(position_list[0][0])
-        position_list.sort(key=lambda x: x[1])
-        max_y = int(position_list[-1][1])
-        min_y = int(position_list[0][1])
-        grid_width = max_x - min_x
-        grid_height = max_y - min_y
-        col_spacing = int(grid_width / (cols - 1))
-        row_spacing = int(grid_height / (rows - 1))
-
-        # Find Colour Masks
-        img_hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)  # Convert to HSV space
-
-        lower_red = np.array([150, 150, 100])  # Lower range for red colour space
-        upper_red = np.array([255, 255, 255])  # Upper range for red colour space
-        mask_red = cv2.inRange(img_hsv, lower_red, upper_red)
-        img_red = cv2.bitwise_and(img, img, mask=mask_red)
-
-        lower_yellow = np.array([10, 150, 100])
-        upper_yellow = np.array([60, 255, 255])
-        mask_yellow = cv2.inRange(img_hsv, lower_yellow, upper_yellow)
-        img_yellow = cv2.bitwise_and(img, img, mask=mask_yellow)
-
-        # Identify Colours
-        grid = np.zeros((rows, cols))
-        id_red = 1
-        id_yellow = -1
-        img_grid_overlay = img_orig.copy()
-        img_grid = np.zeros([img_h, img_w, 3], dtype=np.uint8)
-
-        for x_i in range(0, cols):
-            x = int(min_x + x_i * col_spacing)
-            for y_i in range(0, rows):
-                y = int(min_y + y_i * row_spacing)
-                r = int((mean_h + mean_w) / 5)
-                img_grid_circle = np.zeros((img_h, img_w))
-                cv2.circle(img_grid_circle, (x, y), r, (255, 255, 255), thickness=-1)
-                img_res_red = cv2.bitwise_and(img_grid_circle, img_grid_circle, mask=mask_red)
-                img_grid_circle = np.zeros((img_h, img_w))
-                cv2.circle(img_grid_circle, (x, y), r, (255, 255, 255), thickness=-1)
-                img_res_yellow = cv2.bitwise_and(img_grid_circle, img_grid_circle, mask=mask_yellow)
-                cv2.circle(img_grid_overlay, (x, y), r, (0, 255, 0), thickness=1)
-                if img_res_red.any() != 0:
-                    grid[y_i][x_i] = id_red
-                    cv2.circle(img_grid, (x, y), r, (0, 0, 255), thickness=-1)
-                elif img_res_yellow.any() != 0:
-                    grid[y_i][x_i] = id_yellow
-                    cv2.circle(img_grid, (x, y), r, (0, 255, 255), thickness=-1)
-
-        state = []
-        for x in range(7):
-            column = []
-            for y in range(6):
-                if grid[5-y][x] == id_red:
-                    column.append('r')
-                elif grid[5-y][x] == id_yellow:
-                    column.append('y')
-                else:
-                    column.append('*')
-            state.append(column)
-
-        return state
-
     # Prints a string representation of the grid
     def print_grid(self):
         result = ''
@@ -402,23 +243,29 @@ class Connect4:
         while True:
             if self.__number_of_turns == 0:
                 self.print_grid()
-                self.__tts.say('it\'s a tie')
+                tts.say('it\'s a tie')
                 break
             else:
                 self.print_grid()
                 print('number of turns left: ' + str(self.__number_of_turns) + '\n')
-                self.__tts.say(self.__player + '\'s turn\n')
+                tts.say(self.__player + '\'s turn\n')
 
                 if self.__player == 'player 1':
-                    time.sleep(10)
-                    self.__grid = self.determine_state()
-                    #hole_number = int(raw_input("Which hole number do you want to put the counter in:"))
+                    #self.__grid = nao_video_controller.determine_state()
+                    hole_number = int(raw_input("Which hole number do you want to put the counter in:"))
+                    print('\n')
+                    self.add_counter_to_grid(self.__player_1_colour, self.__grid, hole_number)
+                    ret, frame = video_capture.read()
+                    cv2.imwrite("image.png", frame)
+
+                    # used https://stackoverflow.com/questions/24072790/how-to-detect-key-presses
+                    #print("press q to continue")
+                    #keyboard.wait('q')
                     #print('\n')
-                    #self.add_counter_to_grid(self.__player_1_colour, self.__grid, hole_number)
                     
                     if self.check_if_game_won(self.__player_1_colour, self.__grid):
                         self.print_grid()
-                        self.__tts.say(self.__player + ' won')
+                        tts.say(self.__player + ' won')
                         break
                     else:
                         self.__player = 'player 2'
@@ -426,63 +273,16 @@ class Connect4:
 
                 elif self.__player == 'player 2':
                     hole_number = self.determine_hole_number()
-                    #nao_motion_controller.wait_for_counter(hole_number)
+                    nao_motion_controller.wait_for_counter(hole_number)
                     self.add_counter_to_grid(self.__player_2_colour, self.__grid, hole_number)
-
-                    player_2_counter_put_in_grid = False
-                    while not player_2_counter_put_in_grid:
-                        self.__tts.say("please put player 2's counter in hole " + str(7-hole_number))
-                        time.sleep(10)
-
-                        new_grid = self.determine_state()
-                        if self.__grid == new_grid:
-                            player_2_counter_put_in_grid = True
-                        else:
-                            self.__tts.say("that is the incorrect hole number, please try again")
 
                     if self.check_if_game_won(self.__player_2_colour, self.__grid):
                         self.print_grid()
-                        self.__tts.say(self.__player + ' won')
+                        tts.say(self.__player + ' won')
                         break
                     else:
                         self.__player = 'player 1'
                         self.__number_of_turns -= 1
 
-                        #player_identified = False
-                        #while not player_identified:
-                        #    player_identified = True
-                        #    if not self.__face_characteristics.analyzeFaceCharacteristics(0):
-                        #        player_identified = False
-                        #        self.__tts.say("player has not been identified, please come in front of me")
-                        #        time.sleep(10)
-
-                        #facial_expression_predictions = self.__memory.getData("PeoplePerception/Person/0/ExpressionProperties")
-                        #index = np.argmax(facial_expression_predictions)
-
-                        #if index == 0:
-                        #    facial_expression = 'neutral'
-                        #elif index == 1:
-                        #    facial_expression = 'happy'
-                        #elif index == 2:
-                        #    facial_expression = 'surprised'
-                        #elif index == 3:
-                        #    facial_expression = 'angry'
-                        #elif index == 4:
-                        #    facial_expression = 'sad'
-
-                        # nao_video_controller.take_picture('face_expression')
-
-                        # used https://stackoverflow.com/questions/24072790/how-to-detect-key-presses
-                        #print("press q to continue")
-                        #keyboard.wait('q')
-                        #print('\n')
-
-                        # used https://www.geeksforgeeks.org/reading-writing-text-files-python/
-                        #file = open("facial expression.txt", 'w')
-                        #lines = file.readlines()
-                        #facial_expression = lines[0][0:len(lines[0])-2]
-
-                        #self.adjust_difficulty(facial_expression)
-
 if __name__ == '__main__':
-    Connect4("192.168.189.75", 9559)
+    Connect4()
