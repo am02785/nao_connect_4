@@ -9,19 +9,62 @@ import keyboard
 import time
 from PIL import Image
 
-posture_proxy = naoqi.ALProxy("ALRobotPosture", "192.168.189.75", 9559)
+posture_proxy = naoqi.ALProxy("ALRobotPosture", "192.168.94.75", 9559)
 posture_proxy.goToPosture("Stand", 1.0)
+HEAD_CHAIN = ["HeadPitch", "HeadYaw"]
+FACING_FORWARD = [0, 0]
+RIGHT_ARM_CHAIN = ["RShoulderPitch", "RShoulderRoll", "RElbowRoll", "RElbowYaw", "RWristYaw"]
+LEFT_ARM_CHAIN = ["LShoulderPitch", "LShoulderRoll", "LElbowRoll", "LElbowYaw", "LWristYaw"]
+RAISED = [-1.22, 0.05, -0.55, -1.29, -0.77]
+RED_LEDS = [
+            "Face/Led/Red/Left/0Deg/Actuator/Value",
+            "Face/Led/Red/Left/45Deg/Actuator/Value",
+            "Face/Led/Red/Left/90Deg/Actuator/Value",
+            "Face/Led/Red/Left/135Deg/Actuator/Value",
+            "Face/Led/Red/Left/180Deg/Actuator/Value",
+            "Face/Led/Red/Left/225Deg/Actuator/Value",
+            "Face/Led/Red/Left/270Deg/Actuator/Value",
+            "Face/Led/Red/Left/315Deg/Actuator/Value",
+            "Face/Led/Red/Right/0Deg/Actuator/Value",
+            "Face/Led/Red/Right/45Deg/Actuator/Value",
+            "Face/Led/Red/Right/90Deg/Actuator/Value",
+            "Face/Led/Red/Right/135Deg/Actuator/Value",
+            "Face/Led/Red/Right/180Deg/Actuator/Value",
+            "Face/Led/Red/Right/225Deg/Actuator/Value",
+            "Face/Led/Red/Right/270Deg/Actuator/Value",
+            "Face/Led/Red/Right/315Deg/Actuator/Value"]
+GREEN_LEDS = [
+            "Face/Led/Green/Left/0Deg/Actuator/Value",
+            "Face/Led/Green/Left/45Deg/Actuator/Value",
+            "Face/Led/Green/Left/90Deg/Actuator/Value",
+            "Face/Led/Green/Left/135Deg/Actuator/Value",
+            "Face/Led/Green/Left/180Deg/Actuator/Value",
+            "Face/Led/Green/Left/225Deg/Actuator/Value",
+            "Face/Led/Green/Left/270Deg/Actuator/Value",
+            "Face/Led/Green/Left/315Deg/Actuator/Value",
+            "Face/Led/Green/Right/0Deg/Actuator/Value",
+            "Face/Led/Green/Right/45Deg/Actuator/Value",
+            "Face/Led/Green/Right/90Deg/Actuator/Value",
+            "Face/Led/Green/Right/135Deg/Actuator/Value",
+            "Face/Led/Green/Right/180Deg/Actuator/Value",
+            "Face/Led/Green/Right/225Deg/Actuator/Value",
+            "Face/Led/Green/Right/270Deg/Actuator/Value",
+            "Face/Led/Green/Right/315Deg/Actuator/Value"]
+RED_LEDS_NAME = "red leds"
+GREEN_LEDS_NAME = "green leds"
 
 class Connect4:
 
     # The constructor of the Connect4 class
     def __init__(self, ip_address, port):
         self.__tts = naoqi.ALProxy("ALTextToSpeech", ip_address, port)
-        self.__photo_capture_proxy = naoqi.ALProxy("ALPhotoCapture", ip_address, port)
-        self.__photo_capture_proxy.setPictureFormat("jpg")
         self.__camera_proxy = naoqi.ALProxy("ALVideoDevice", ip_address, port)
         self.__memory = naoqi.ALProxy("ALMemory", ip_address, port)
         self.__face_characteristics = naoqi.ALProxy("ALFaceCharacteristics", ip_address, port)
+        self.__motion = naoqi.ALProxy("ALMotion", ip_address, port)
+        self.__leds = naoqi.ALProxy("ALLeds", ip_address, port)
+        self.__leds.createGroup(RED_LEDS_NAME, RED_LEDS)
+        self.__leds.createGroup(GREEN_LEDS_NAME, GREEN_LEDS)
         # The player attribute which specifies who's turn it is
         self.__player = 'player 1'
         # The grid attribute which represents the grid in the game
@@ -234,42 +277,64 @@ class Connect4:
             self.__tts.say('the difficulty is now ' + self.__difficulty)
         elif self.__difficulty == 'medium':
             if facial_expression == 'anger' \
-            or facial_expression == 'surprise':
+            or facial_expression == 'surprise' \
+            or facial_expression == 'disgust' \
+            or facial_expression == 'fear' \
+            or facial_expression == 'sad':
                 self.__difficulty = 'easy'
             elif facial_expression == 'happy':
                 self.__difficulty = 'hard'
             self.__tts.say('the difficulty is now ' + self.__difficulty)
         elif self.__difficulty == 'hard':
             if facial_expression == 'anger' \
-            or facial_expression == 'surprise':
+            or facial_expression == 'surprise'\
+            or facial_expression == 'disgust' \
+            or facial_expression == 'fear' \
+            or facial_expression == 'sad':
                 self.__difficulty = 'medium'
             self.__tts.say('the difficulty is now ' + self.__difficulty)
 
-    # determines the state of the game
-    # used https://github.com/Matt-Jennings-GitHub/ConnectFour-ComputerVisionAI/blob/master/ConnectFourComputerVision.py
-    def determine_state(self):
-        # used http://doc.aldebaran.com/1-14/dev/python/examples/vision/get_image.html
-        name_id = self.__camera_proxy.subscribeCamera("VM_2", 1, 2, 13, 15)
+    # takes a picture
+    def take_picture(self, camera_number, image_name):
+        name_id = self.__camera_proxy.subscribeCamera("VM", camera_number, 2, 13, 1)
+        self.__motion.angleInterpolation(HEAD_CHAIN, FACING_FORWARD, 2., True)
         nao_image = self.__camera_proxy.getImageRemote(name_id)
-
         self.__camera_proxy.unsubscribe(name_id)
-
         image_width = nao_image[0]
         image_height = nao_image[1]
         array = nao_image[6]
 
         im = Image.frombytes("RGB", (image_width, image_height), array)
-        im.save("grid_image.png", "PNG")
+        im.save(image_name + ".png", "PNG")
+
+    # programs the NAO robot to react to the game state
+    def react_to_game_state(self):
+        score = self.score_position(self.__player_1_colour, self.__player_2_colour, self.__grid)
+        if score >= 100:
+            self.__motion.angleInterpolation(LEFT_ARM_CHAIN, RAISED, 2., True)
+            self.__motion.angleInterpolation(LEFT_ARM_CHAIN, RAISED, 2., True)
+            self.__tts.say("I am doing great at this game")
+            self.__leds.off("FaceLeds")
+            self.__leds.on(GREEN_LEDS_NAME)
+            time.sleep(5)
+            self.__leds.off(GREEN_LEDS_NAME)
+            self.__leds.on("FaceLeds")
+        elif score <= -100:
+            self.__tts.say("Wow you really are great at this game")
+            self.__leds.off("FaceLeds")
+            self.__leds.on(RED_LEDS_NAME)
+            time.sleep(5)
+            self.__leds.off(RED_LEDS_NAME)
+            self.__leds.on("FaceLeds")
+
+    # determines the state of the game
+    # used https://github.com/Matt-Jennings-GitHub/ConnectFour-ComputerVisionAI/blob/master/ConnectFourComputerVision.py
+    def determine_state(self):
+        # used http://doc.aldebaran.com/1-14/dev/python/examples/vision/get_image.html
+        self.take_picture(1, "grid_image")
 
         img = cv2.imread("grid_image.png")
         img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
-
-        #file_name = self.__photo_capture_proxy.takePicture('images', 'image', True)
-        #print(file_name[0])
-        #print(self.__photo_capture_proxy.getColorSpace())
-        #print(self.__photo_capture_proxy.getResolution())
-        #img = cv2.imread(file_name[0])
-        #print(img)
 
         new_width = 500  # Resize
         img_h, img_w, _ = img.shape
@@ -412,9 +477,6 @@ class Connect4:
                 if self.__player == 'player 1':
                     time.sleep(10)
                     self.__grid = self.determine_state()
-                    #hole_number = int(raw_input("Which hole number do you want to put the counter in:"))
-                    #print('\n')
-                    #self.add_counter_to_grid(self.__player_1_colour, self.__grid, hole_number)
                     
                     if self.check_if_game_won(self.__player_1_colour, self.__grid):
                         self.print_grid()
@@ -423,10 +485,10 @@ class Connect4:
                     else:
                         self.__player = 'player 2'
                         self.__number_of_turns -= 1
+                        self.react_to_game_state()
 
                 elif self.__player == 'player 2':
                     hole_number = self.determine_hole_number()
-                    #nao_motion_controller.wait_for_counter(hole_number)
                     self.add_counter_to_grid(self.__player_2_colour, self.__grid, hole_number)
 
                     player_2_counter_put_in_grid = False
@@ -438,6 +500,7 @@ class Connect4:
                         if self.__grid == new_grid:
                             player_2_counter_put_in_grid = True
                         else:
+                            self.print_grid()
                             self.__tts.say("that is the incorrect hole number, please try again")
 
                     if self.check_if_game_won(self.__player_2_colour, self.__grid):
@@ -448,41 +511,24 @@ class Connect4:
                         self.__player = 'player 1'
                         self.__number_of_turns -= 1
 
-                        #player_identified = False
-                        #while not player_identified:
-                        #    player_identified = True
-                        #    if not self.__face_characteristics.analyzeFaceCharacteristics(0):
-                        #        player_identified = False
-                        #        self.__tts.say("player has not been identified, please come in front of me")
-                        #        time.sleep(10)
+                        # used https://stackoverflow.com/questions/24072790/how-to-detect-key-presses
+                        print("press q to continue")
+                        keyboard.wait('q')
+                        print('\n')
 
-                        #facial_expression_predictions = self.__memory.getData("PeoplePerception/Person/0/ExpressionProperties")
-                        #index = np.argmax(facial_expression_predictions)
-
-                        #if index == 0:
-                        #    facial_expression = 'neutral'
-                        #elif index == 1:
-                        #    facial_expression = 'happy'
-                        #elif index == 2:
-                        #    facial_expression = 'surprised'
-                        #elif index == 3:
-                        #    facial_expression = 'angry'
-                        #elif index == 4:
-                        #    facial_expression = 'sad'
-
-                        # nao_video_controller.take_picture('face_expression')
+                        self.take_picture(0, "face_of_user")
 
                         # used https://stackoverflow.com/questions/24072790/how-to-detect-key-presses
-                        #print("press q to continue")
-                        #keyboard.wait('q')
-                        #print('\n')
+                        print("press q to continue")
+                        keyboard.wait('q')
+                        print('\n')
 
-                        # used https://www.geeksforgeeks.org/reading-writing-text-files-python/
-                        #file = open("facial expression.txt", 'w')
-                        #lines = file.readlines()
-                        #facial_expression = lines[0][0:len(lines[0])-2]
+                        #used https://www.geeksforgeeks.org/reading-writing-text-files-python/
+                        file = open("facial expression.txt", 'r')
+                        lines = file.readlines()
+                        facial_expression = lines[0][0:len(lines[0])-2]
 
-                        #self.adjust_difficulty(facial_expression)
+                        self.adjust_difficulty(facial_expression)
 
 if __name__ == '__main__':
-    Connect4("192.168.189.75", 9559)
+    Connect4("192.168.94.75", 9559)
